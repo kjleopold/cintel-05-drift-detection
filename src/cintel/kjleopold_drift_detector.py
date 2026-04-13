@@ -1,7 +1,7 @@
 """
 case_drift_detector.py - Project script (example).
 
-Author: Denise Case
+Author: Denise Case, Kellie Leopold
 Date: 2026-03
 
 Reference and Current System Metrics Data
@@ -86,6 +86,7 @@ SUMMARY_LONG_FILE: Final[Path] = ARTIFACTS_DIR / "drift_summary_long_kjleopold.c
 REQUESTS_DRIFT_THRESHOLD: Final[float] = 20.0
 ERRORS_DRIFT_THRESHOLD: Final[float] = 2.0
 LATENCY_DRIFT_THRESHOLD: Final[float] = 2000.0
+ERROR_RATE_THRESHOLD: Final[float] = 0.02
 
 # === DEFINE THE MAIN FUNCTION ===
 
@@ -134,6 +135,9 @@ def main() -> None:
             pl.col("requests").mean().alias("reference_avg_requests"),
             pl.col("errors").mean().alias("reference_avg_errors"),
             pl.col("total_latency_ms").mean().alias("reference_avg_latency_ms"),
+            (pl.col("errors").mean() / pl.col("requests").mean()).alias(
+                "reference_error_rate"
+            ),
         ]
     )
 
@@ -142,6 +146,9 @@ def main() -> None:
             pl.col("requests").mean().alias("current_avg_requests"),
             pl.col("errors").mean().alias("current_avg_errors"),
             pl.col("total_latency_ms").mean().alias("current_avg_latency_ms"),
+            (pl.col("errors").mean() / pl.col("requests").mean()).alias(
+                "current_error_rate"
+            ),
         ]
     )
 
@@ -200,6 +207,12 @@ def main() -> None:
         .alias("latency_mean_difference_ms")
     )
 
+    error_rate_difference_recipe: pl.Expr = (
+        (pl.col("current_error_rate") - pl.col("reference_error_rate"))
+        .round(4)
+        .alias("error_rate_difference")
+    )
+
     # ----------------------------------------------------
     # STEP 4.1: APPLY THE DIFFERENCE RECIPES TO EXPAND THE DATAFRAME
     # ----------------------------------------------------
@@ -208,6 +221,7 @@ def main() -> None:
             requests_mean_difference_recipe,
             errors_mean_difference_recipe,
             latency_mean_difference_recipe,
+            error_rate_difference_recipe,
         ]
     )
 
@@ -233,6 +247,10 @@ def main() -> None:
         pl.col("latency_mean_difference_ms").abs() > LATENCY_DRIFT_THRESHOLD
     ).alias("latency_is_drifting_flag")
 
+    error_rate_is_drifting_flag_recipe: pl.Expr = (
+        pl.col("error_rate_difference").abs() > ERROR_RATE_THRESHOLD
+    ).alias("error_rate_is_drifting_flag")
+
     # ----------------------------------------------------
     # STEP 5.1: APPLY THE DRIFT FLAG RECIPES TO EXPAND THE DATAFRAME
     # ----------------------------------------------------
@@ -241,6 +259,7 @@ def main() -> None:
             requests_is_drifting_flag_recipe,
             errors_is_drifting_flag_recipe,
             latency_is_drifting_flag_recipe,
+            error_rate_is_drifting_flag_recipe,
         ]
     )
 
